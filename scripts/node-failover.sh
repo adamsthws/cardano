@@ -29,7 +29,7 @@ ekg_port=12788
 node_to_test_address=192.168.x.x
 
 # Set the port number of the node to test
-node_to_test_port=3001~
+node_to_test_port=3001
 
 # Check for required commands
 required_cmds=("curl" "jq" "cp" "kill" "mv")
