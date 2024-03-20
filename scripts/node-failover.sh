@@ -4,32 +4,43 @@
 # It will test if your main block producer is live. 
 # If offline, block production on the hot-spare is activated until the main BP comes back online.
 
-# Adapted from Andrew Westberg's Script to make it easier for Guild Tools (cntools) users.
+# Adapted and extended from Andrew Westberg's Script:
 # https://gist.github.com/AndrewWestberg/d982fb1304db36df8c484599180bd9e2
 
 # Leave blank if you don't have something like postfix enabled to send emails from the host.
 notification_email=""
 
-# Set the path to your block producer files
-credentials_kes_file_active=/path/to/kes.skey
-credentials_vrf_file_active=/path/to/vrf.skey
-credentials_opcert_file_active=/path/to/node.opcert
-credentials_kes_file_standby=/path/to/kes.skey.standby
-credentials_vrf_file_standby=/path/to/vrf.skey.standby
-credentials_opcert_file_standby=/path/to/node.opcert.standby
+# Set the EKG port
+# (Default = 12788)
+ekg_port=12788
+
+# Set the address of the node to test 
+# (Hostname/IP)
+node_to_test_address=192.168.0.x
+
+# Set the port number of the node to test
+node_to_test_port=3001
+
+# Path to your env file. Adjust this path accordingly.
+ENV_FILE="/opt/cardano/cnode/scripts/env"
+
+### DONT EDIT ANYTHING BELOW THIS LINE ###
 
 # Set the name of the systemd cardano-node service 
 # Guild tools uses 'cnode.service'. Others may use 'node.service'
 cardano_node_service=cnode.service
 
-# Set the EKG port (Default = 12788)
-ekg_port=12788
+# Sets the directory name where your pool files live.
+source "$ENV_FILE"
+pool_name="$POOL_NAME"
 
-# Set the address (hostname/IP) of the node to test
-node_to_test_address=192.168.x.x
-
-# Set the port number of the node to test
-node_to_test_port=3001
+# Path to your block producer files
+credentials_kes_file_active=$CNODE_HOME/priv/pool/$pool_name/hot.skey
+credentials_vrf_file_active=$CNODE_HOME/priv/pool/$pool_name/vrf.skey
+credentials_opcert_file_active=$CNODE_HOME/priv/pool/$pool_name/op.cert
+credentials_kes_file_standby=$CNODE_HOME/priv/pool/$pool_name/hot.skey.standby
+credentials_vrf_file_standby=$CNODE_HOME/priv/pool/$pool_name/vrf.skey.standby
+credentials_opcert_file_standby=$CNODE_HOME/priv/pool/$pool_name/op.cert.standby
 
 # Check for required commands
 required_cmds=("curl" "jq" "cp" "kill" "mv")
@@ -51,10 +62,10 @@ leader_checks_2=`curl -H "Accept: application/json" http://127.0.0.1:${ekg_port}
 if [[ $leader_checks_2 -gt $leader_checks_1 ]]
 then
 	is_leading=1
-	#echo "ACTIVE mode. checking..."
+	echo "Hot spare is currently in ACTIVE mode (Making blocks). checking..."
 else
 	is_leading=0
-	#echo "STANDBY mode. checking..."
+	echo "Hot spare is currently in STANDBY mode (Not making blocks). checking..."
 fi
 
 # Locate cncli
@@ -70,45 +81,62 @@ fi
 mail_cmd=$(which mail)
 
 # Test if the remote node is online
-error=`$cncli_cmd ping --host ${node_to_test_address} --port ${node_to_test_port} | jq .status | grep error | wc -l`
+error=$($cncli_cmd ping --host ${node_to_test_address} --port ${node_to_test_port} | jq .status | grep error | wc -l)
 if [[ $error -eq 1 ]]
 then
-	#echo "relay0 error. check relay1..."
-	#sleep 10
-	#error=`$cncli_path ping --host ${node2_to_test_address} --port ${node2_to_test_port} | jq .status | grep error | wc -l`
-	#if [[ $error -eq 1 ]]
-	#then
-		if [[ $is_leading -eq 0 ]]
+    echo "Cannot find node at: ${node_to_test_address}:${node_to_test_port}"
+    if [[ $is_leading -eq 0 ]]
+	then
+        # Activate block production on the hot spare
+        echo "$(date): Hot spare ACTIVATING..."
+        if [[ -f "$credentials_kes_file_standby" && -f "$credentials_vrf_file_standby" && -f "$credentials_opcert_file_standby" ]]
 		then
-      # Activate block production on the hot spare
-			echo "$(date): Enter ACTIVE mode..."
-			cp -f $credentials_kes_file_standby $credentials_kes_file_active
-			cp -f $credentials_vrf_file_standby $credentials_vrf_file_active
-			cp -f $credentials_opcert_file_standby $credentials_opcert_file_active
-			kill -s HUP $service_pid
-      # Send email notification
-      if [[ -n "$mail_cmd" && -n "$notification_email" ]]
-      then
-        $mail_cmd -s "Cardano Failover Activated!" ${notification_email} <<< "Cardano failover block producer has been activated!"
-      fi
-		fi
-		exit 0
-	#fi
+            mv -f "$credentials_kes_file_standby" "$credentials_kes_file_active"
+            mv -f "$credentials_vrf_file_standby" "$credentials_vrf_file_active"
+            mv -f "$credentials_opcert_file_standby" "$credentials_opcert_file_active"
+            echo "Files copied successfully."
+        else
+            echo "One or more 'standby' source files do not exist, cannot proceed with file rename."
+            exit 1
+        fi
+        kill -s HUP $service_pid
+        echo "Block production ACTIVATED"
+        # Send email notification
+        if [[ -n "$mail_cmd" && -n "$notification_email" ]]
+		then
+            $mail_cmd -s "Cardano Failover Activated!" ${notification_email} <<< "Cardano failover block producer has been activated!"
+            echo "Email notification sent to: ${notification_email}"
+        fi
+    fi
+    exit 0
 fi
 
 # Turn off block production on the hot spare
 if [[ $is_leading -eq 1 ]]
 then
-	# Hot spare is currently active but shouldn't be.
-	echo "$(date): Return to STANDBY mode..."
-	mv -f $credentials_kes_file_active $credentials_kes_file_standby
-	mv -f $credentials_vrf_file_active $credentials_vrf_file_standby
-	mv -f $credentials_opcert_file_active $credentials_opcert_file_standby
+	# Hot spare is currently active but shouldn't be
+	echo "$(date): Main node is active. Hot spare returning to STANDBY mode..."
+	if [[ -f "$credentials_kes_file_active" && -f "$credentials_vrf_file_active" && -f "$credentials_opcert_file_active" ]]
+	then
+		mv -f $credentials_kes_file_active $credentials_kes_file_standby
+		mv -f $credentials_vrf_file_active $credentials_vrf_file_standby
+		mv -f $credentials_opcert_file_active $credentials_opcert_file_standby
+		echo "Files moved successfully."
+	else
+  		echo "One or more 'active' source files do not exist, cannot proceed with file rename."
+		exit 1
+	fi
 	kill -s HUP $service_pid
+	echo "Block production DEACTIVATED"
   # Send email notification
   if [[ -n "$mail_cmd" && -n "$notification_email" ]]
   then
     $mail_cmd -s "Cardano Failover Deactivated!" ${notification_email} <<< "Cardano failover block producer has been deactivated!"
+	echo "Email notification sent to: ${notification_email}"
   fi
+  exit 0
 fi
 
+# No error, no actionnecessary
+echo "Main node is online and hot spare is in STANDBY mode. No action necassary"
+exit 0
