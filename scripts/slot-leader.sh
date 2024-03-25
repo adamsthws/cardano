@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# This script calculates a the leader schedule for the next epoch using cncli.
+# CNCLI SLOT LEADER
+# This script calculates the slot leader schedule for the upcoming epoch using cncli.
 # Must be run with less than 1.5 days to go before the end of the current epoch.
 # It runs at a low CPU priority (nice -n 19) to minimize impact on the node's performance.
+# Assuming you're using the default CNTOOLS path you can simply run the script without altering any variables.
 
 # Sets the pool name
 env_file="$CNODE_HOME/scripts/env"
