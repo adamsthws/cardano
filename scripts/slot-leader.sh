@@ -12,7 +12,7 @@ source "$env_file"
 pool_name="$POOL_NAME"
 
 # Set variables
-socket_path="$CNODE_HOME/sockets/node0.socket"
+socket_path="$CARDANO_NODE_SOCKET_PATH"
 pool_id="$CNODE_HOME/priv/pool/$pool_name/pool.id"
 vrf_skey="$CNODE_HOME/priv/pool/$pool_name/vrf.skey"
 byron_genesis="$CNODE_HOME/files/byron-genesis.json"
