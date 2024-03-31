@@ -6,17 +6,20 @@
 # It runs at a low CPU priority (nice -n 19) to minimize impact on the node's performance.
 # Assuming you're using the default CNTOOLS path you can simply run the script without altering any variables.
 
-# Sets the pool name
+# Set your pool's env file
 env_file="$CNODE_HOME/scripts/env"
-source "$env_file"
-pool_name="$POOL_NAME"
 
-# Set variables
+##############################################
+### DO NOT CHANGE ANYTHING BELOW THIS LINE ###
+##############################################
+
+# Get variables from env file
+source "$env_file"
 socket_path="$CARDANO_NODE_SOCKET_PATH"
-pool_id="$CNODE_HOME/priv/pool/$pool_name/pool.id"
-vrf_skey="$CNODE_HOME/priv/pool/$pool_name/vrf.skey"
-byron_genesis="$CNODE_HOME/files/byron-genesis.json"
-shelley_genesis="$CNODE_HOME/files/shelley-genesis.json"
+pool_id="$POOL_FOLDER/$POOL_NAME/$POOL_ID_FILENAME"
+vrf_skey="$POOL_FOLDER/$POOL_NAME/$POOL_VRF_SK_FILENAME"
+byron_genesis="$BYRON_GENESIS_JSON"
+shelley_genesis="GENESIS_JSON"
 db_path="$CNODE_HOME/guild-db/cncli/cncli.db"
 
 # Capture stake-snapshot
@@ -24,7 +27,6 @@ stake_snapshot=$(nice -n 19 cardano-cli query stake-snapshot \
 --socket-path $socket_path \
 --stake-pool-id $(cat $pool_id) \
 --mainnet)
-
 # Parse stake values from the stake_snapshot
 pool_stake=$(echo "$stake_snapshot" | jq 'first(.pools[]).stakeMark')
 active_stake=$(echo "$stake_snapshot" | jq '.total.stakeMark')
