@@ -19,7 +19,7 @@ socket_path="$CARDANO_NODE_SOCKET_PATH"
 pool_id="$POOL_FOLDER/$POOL_NAME/$POOL_ID_FILENAME"
 vrf_skey="$POOL_FOLDER/$POOL_NAME/$POOL_VRF_SK_FILENAME"
 byron_genesis="$BYRON_GENESIS_JSON"
-shelley_genesis="GENESIS_JSON"
+shelley_genesis="$GENESIS_JSON"
 db_path="$CNODE_HOME/guild-db/cncli/cncli.db"
 
 # Capture stake-snapshot
